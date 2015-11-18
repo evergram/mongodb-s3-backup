@@ -28,7 +28,7 @@ AWS_SECRET_KEY=
 S3_REGION=
 S3_BUCKET=
 
-while getopts "ht:u:p:k:s:r:b:" OPTION
+while getopts "ht:k:s:r:b:" OPTION
 do
   case $OPTION in
     h)
@@ -70,7 +70,7 @@ FILE_NAME="backup-$DATE"
 ARCHIVE_NAME="$FILE_NAME.tar.gz"
 
 # Get if server is part of replica, if yes get slave address
-MONGODB_INSTANCE=$(mongo admin --quiet --eval "var repl = rs.status(); if (repl.ok) { for (var i in repl.members) { if (repl.members[i].stateStr == 'SECONDARY') { printjson(repl.members[i].name); break; }}}")
+MONGODB_INSTANCE=$(mongo admin --quiet --eval "var repl = rs.status(); if (repl.ok) { for (var i in repl.members) { if (repl.members[i].stateStr == 'SECONDARY') { printjson(repl.members[i].name); break; }}}" | sed s/\"//g)
 
 # If not replica, use localhost
 if [[ -z $MONGODB_INSTANCE ]]
@@ -80,13 +80,13 @@ fi
 
 # Lock the database
 # Note there is a bug in mongo 2.2.0 where you must touch all the databases before you run mongodump
-mongo --host "$MONGODB_INSTANCE" admin --eval "var databaseNames = db.getMongo().getDBNames(); for (var i in databaseNames) { printjson(db.getSiblingDB(databaseNames[i]).getCollectionNames()) }; printjson(db.fsyncLock());"
+mongo --host $MONGODB_INSTANCE admin --eval "var databaseNames = db.getMongo().getDBNames(); rs.slaveOk(); for (var i in databaseNames) { printjson(db.getSiblingDB(databaseNames[i]).getCollectionNames()) }; printjson(db.fsyncLock());"
 
 # Dump the database
-mongodump --host "$MONGODB_INSTANCE" --out $DIR/backup/$FILE_NAME
+mongodump --host $MONGODB_INSTANCE --out $DIR/backup/$FILE_NAME
 
 # Unlock the database
-mongo --host "$MONGODB_INSTANCE" admin --eval "printjson(db.fsyncUnlock());"
+mongo --host $MONGODB_INSTANCE admin --eval "printjson(db.fsyncUnlock());"
 
 # Tar Gzip the file
 tar -C $DIR/backup/ -zcvf $DIR/backup/$ARCHIVE_NAME $FILE_NAME/
