@@ -1,13 +1,11 @@
 #!/bin/bash
 #
-# Argument = -u user -p password -k key -s secret -b bucket
+# Argument = -k key -s secret -b bucket
 #
 # To Do - Add logging of output.
 # To Do - Abstract bucket region to options
 
 set -e
-
-export PATH="$PATH:/usr/local/bin"
 
 usage()
 {
@@ -18,8 +16,6 @@ This script dumps the current mongo database, tars it, then sends it to an Amazo
 
 OPTIONS:
    -h      Show this message
-   -u      Mongodb user
-   -p      Mongodb password
    -k      AWS Access Key
    -s      AWS Secret Key
    -r      Amazon S3 region
@@ -27,25 +23,17 @@ OPTIONS:
 EOF
 }
 
-MONGODB_USER=
-MONGODB_PASSWORD=
 AWS_ACCESS_KEY=
 AWS_SECRET_KEY=
 S3_REGION=
 S3_BUCKET=
 
-while getopts “ht:u:p:k:s:r:b:” OPTION
+while getopts "ht:u:p:k:s:r:b:" OPTION
 do
   case $OPTION in
     h)
       usage
       exit 1
-      ;;
-    u)
-      MONGODB_USER=$OPTARG
-      ;;
-    p)
-      MONGODB_PASSWORD=$OPTARG
       ;;
     k)
       AWS_ACCESS_KEY=$OPTARG
@@ -66,7 +54,7 @@ do
   esac
 done
 
-if [[ -z $MONGODB_USER ]] || [[ -z $MONGODB_PASSWORD ]] || [[ -z $AWS_ACCESS_KEY ]] || [[ -z $AWS_SECRET_KEY ]] || [[ -z $S3_REGION ]] || [[ -z $S3_BUCKET ]]
+if [[ -z $AWS_ACCESS_KEY ]] || [[ -z $AWS_SECRET_KEY ]] || [[ -z $S3_REGION ]] || [[ -z $S3_BUCKET ]]
 then
   usage
   exit 1
@@ -75,20 +63,30 @@ fi
 # Get the directory the script is being run from
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 echo $DIR
+
 # Store the current date in YYYY-mm-DD-HHMMSS
 DATE=$(date -u "+%F-%H%M%S")
 FILE_NAME="backup-$DATE"
 ARCHIVE_NAME="$FILE_NAME.tar.gz"
 
+# Get if server is part of replica, if yes get slave address
+MONGODB_INSTANCE=$(mongo admin --quiet --eval "var repl = rs.status(); if (repl.ok) { for (var i in repl.members) { if (repl.members[i].stateStr == 'SECONDARY') { printjson(repl.members[i].name); break; }}}")
+
+# If not replica, use localhost
+if [[ -z $MONGODB_INSTANCE ]]
+then
+  MONGODB_INSTANCE="localhost:27017"
+fi
+
 # Lock the database
 # Note there is a bug in mongo 2.2.0 where you must touch all the databases before you run mongodump
-mongo -username "$MONGODB_USER" -password "$MONGODB_PASSWORD" admin --eval "var databaseNames = db.getMongo().getDBNames(); for (var i in databaseNames) { printjson(db.getSiblingDB(databaseNames[i]).getCollectionNames()) }; printjson(db.fsyncLock());"
+mongo --host "$MONGODB_INSTANCE" admin --eval "var databaseNames = db.getMongo().getDBNames(); for (var i in databaseNames) { printjson(db.getSiblingDB(databaseNames[i]).getCollectionNames()) }; printjson(db.fsyncLock());"
 
 # Dump the database
-mongodump -username "$MONGODB_USER" -password "$MONGODB_PASSWORD" --out $DIR/backup/$FILE_NAME
+mongodump --host "$MONGODB_INSTANCE" --out $DIR/backup/$FILE_NAME
 
 # Unlock the database
-mongo -username "$MONGODB_USER" -password "$MONGODB_PASSWORD" admin --eval "printjson(db.fsyncUnlock());"
+mongo --host "$MONGODB_INSTANCE" admin --eval "printjson(db.fsyncUnlock());"
 
 # Tar Gzip the file
 tar -C $DIR/backup/ -zcvf $DIR/backup/$ARCHIVE_NAME $FILE_NAME/
