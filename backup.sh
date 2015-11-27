@@ -1,9 +1,8 @@
 #!/bin/bash
 #
-# Argument = -k key -s secret -b bucket
+# Argument = -i host -k key -s secret -b bucket -r region
 #
 # To Do - Add logging of output.
-# To Do - Abstract bucket region to options
 
 set -e
 
@@ -16,6 +15,7 @@ This script dumps the current mongo database, tars it, then sends it to an Amazo
 
 OPTIONS:
    -h      Show this message
+   -i      Mongo host
    -k      AWS Access Key
    -s      AWS Secret Key
    -r      Amazon S3 region
@@ -27,8 +27,9 @@ AWS_ACCESS_KEY=
 AWS_SECRET_KEY=
 S3_REGION=
 S3_BUCKET=
+MONGODB_HOST=
 
-while getopts "ht:k:s:r:b:" OPTION
+while getopts "ht:k:s:r:b:i:" OPTION
 do
   case $OPTION in
     h)
@@ -47,6 +48,9 @@ do
     b)
       S3_BUCKET=$OPTARG
       ;;
+    i)
+      MONGODB_HOST=$OPTARG
+      ;;
     ?)
       usage
       exit
@@ -54,7 +58,7 @@ do
   esac
 done
 
-if [[ -z $AWS_ACCESS_KEY ]] || [[ -z $AWS_SECRET_KEY ]] || [[ -z $S3_REGION ]] || [[ -z $S3_BUCKET ]]
+if [[ -z $MONGODB_HOST ]] || [[ -z $AWS_ACCESS_KEY ]] || [[ -z $AWS_SECRET_KEY ]] || [[ -z $S3_REGION ]] || [[ -z $S3_BUCKET ]]
 then
   usage
   exit 1
@@ -70,7 +74,7 @@ FILE_NAME="backup-$DATE"
 ARCHIVE_NAME="$FILE_NAME.tar.gz"
 
 # Get if server is part of replica, if yes get slave address
-MONGODB_INSTANCE=$(mongo admin --quiet --eval "var repl = rs.status(); if (repl.ok) { for (var i in repl.members) { if (repl.members[i].stateStr == 'SECONDARY') { printjson(repl.members[i].name); break; }}}" | sed s/\"//g)
+MONGODB_INSTANCE=$(mongo --host $MONGODB_HOST admin --quiet --eval "var repl = rs.status(); if (repl.ok) { for (var i in repl.members) { if (repl.members[i].stateStr == 'SECONDARY') { printjson(repl.members[i].name); break; }}}" | sed s/\"//g)
 
 # If not replica, use localhost
 if [[ -z $MONGODB_INSTANCE ]]
