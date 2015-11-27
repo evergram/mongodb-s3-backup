@@ -1,5 +1,7 @@
 # Mongodb to Amazon s3 Backup Script
 
+(Note: If connected to a cluster will use slave to take backup)
+
 ## Requirements
 
 * Running mongod process
@@ -12,7 +14,9 @@
 
 ## Usage
 
-`bash /path/to/backup.sh -i MONGODB_HOST -k AWS_ACCESS_KEY -s AWS_SECRET_KEY -r S3_REGION -b S3_BUCKET`
+```
+bash /path/to/backup.sh -i MONGODB_HOST -k AWS_ACCESS_KEY -s AWS_SECRET_KEY -r S3_REGION -b S3_BUCKET
+```
 
 Where `S3_REGION` is in the format `ap-southeast-1`
 
@@ -20,9 +24,11 @@ Where `S3_REGION` is in the format `ap-southeast-1`
 
 ### Daily
 
-Add the following line to `/etc/cron.d/db-backup` to run the script every day at midnight (UTC time) 
+Add the following line to `/etc/cron.d/db-backup` to run the script every day at midnight (UTC time)
 
-    0 0 * * * root /bin/bash /path/to/backup.sh -i MONGODB_HOST -k AWS_ACCESS_KEY -s AWS_SECRET_KEY -b S3_BUCKET -r S3_REGION
+```
+0 0 * * * root /bin/bash /path/to/backup.sh -i MONGODB_HOST -k AWS_ACCESS_KEY -s AWS_SECRET_KEY -b S3_BUCKET -r S3_REGION
+```
 
 # License
 
